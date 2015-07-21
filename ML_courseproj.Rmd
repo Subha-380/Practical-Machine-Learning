@@ -1,0 +1,133 @@
+---
+title: "Course Project"
+author: "Subha"
+date: "July 21, 2015"
+output: html_document
+---
+
+These are the files produced during a homework assignment of Coursera’s MOOC Practical Machine Learning from Johns Hopkins University. 
+The scripts tested and executed on MAC OS X 10.10.2, and RStudio Version 0.98.1103
+
+
+### Loading the libraries needed for the project
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+### Downloading the training and test files for this assignment
+```{r,echo=TRUE}
+fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileURL,destfile="./training_data.csv",method="curl")
+
+## reading the training file to R
+training <- read.csv("./training_data.csv",header=T)
+
+## downloading and reading the test file into R
+fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL,destfile="./test_data.csv",method="curl")
+testing <- read.csv("./test_data.csv",header=T)
+
+```
+### Cleaning Data for analysis 
+```{r,echo=TRUE}
+##No of rows and columns in training
+dim(training)
+## removing columns that have "NA" from training
+new_data <- training[ , ! apply( training , 2 , function(x) any(is.na(x)) ) ]
+## removing the timestamp columns and sequence data from new data set
+new_data<-new_data[,-c(1:7)]
+## Checking for near zero variables
+non_zero <- nearZeroVar(new_data, saveMetrics=FALSE)
+print(non_zero)
+
+## using only columns that do not have non zero variance for our final predictions
+new_data <- new_data[,-(non_zero)]
+dim(new_data)
+```{r}
+```
+### Reproduceability 
+```{r}
+set.seed(100)
+
+## Dividing the data into training and test
+inTrain <- createDataPartition(new_data$classe,p=0.7,list=F)
+train_set <- new_data[inTrain,]
+test_set <- new_data[-inTrain,]
+
+## Ensuring the testing data set provided also has the same no of columns as the training set
+## removing the classe column
+```{r,echo=TRUE}
+new_col_list <- colnames(new_data[,-53])
+testing <- testing[new_col_list]
+```{r}
+```
+### ML algortihms for prediction
+```{r,echo=TRUE}
+##Model Building : Using "rpart" - decision tree algorithm
+modFit<-train(classe~.,method = "rpart",data=train_set)
+fancyRpartPlot(modFit$finalModel)
+## Predicting...
+pred_rpart<-predict(modFit,test_set)
+## Confusion Matrix to test and report the results
+results<-confusionMatrix(pred_rpart,test_set$classe)
+print(results)
+```{r}
+```
+##Analysis
+### As accuracy is very low with rpart, lets try building with randomForest
+```{r,echo=T}
+## Model Building using Random forest algorithm
+model_rf <- randomForest(classe~.,data=train_set)
+##Predictions:
+pred_rf <-predict(model_rf,test_set)
+## ConfusionMatrix to publish results
+results_rf<-confusionMatrix(pred_rf,test_set$classe)
+print(results_rf)
+##Accuracy is > 99% with Random Forest. We will use this model to predict against the test
+## set of 20 observations provided for testing our algorithm
+```
+###Final Predictions with our model
+```{r,echo=TRUE}
+predictTest <- predict(model_rf,testing)
+## print the results of prediction
+print(predictTest)
+```{r}
+```
+## Out of Sample Error
+```{r}
+### out of sample error is the error rate we get on a new data set.
+### I am using the RandomForest algorithm for my predictions and can say the ### average out of sample error will be 
+
+##Random Forest Testing Set: 1 - .9954 = 0.0046
+```{r}
+```
+### Validating my estimate out of error by cross validation
+```{r,echo=TRUE}
+modFit_cv <-randomForest(classe~., data=train_set,method="cv")
+pred_cv <- predict(modFit_cv,test_set)
+confusionMatrix(pred_cv,test_set$classe)
+```{r}
+### Out of sample error = 1 - Accuracy ( 1 - .9959 = 0051)
+```{r}
+
+```
+Function to predict the answers
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+Output the answers
+```{r,echo=TRUE}
+answers = predictTest
+pml_write_files(answers)
+
+
